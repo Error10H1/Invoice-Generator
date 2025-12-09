@@ -9,18 +9,18 @@ import {
   Briefcase, 
   CreditCard, 
   Percent, 
-  ChevronDown,
-  LayoutTemplate,
-  Package,
-  Image as ImageIcon,
-  Upload,
-  FolderOpen,
-  X,
-  ArrowRight,
-  Download,
-  Upload as UploadIcon,
-  RefreshCw,
-  CheckCircle,
+  ChevronDown, 
+  LayoutTemplate, 
+  Package, 
+  Image as ImageIcon, 
+  Upload, 
+  FolderOpen, 
+  X, 
+  ArrowRight, 
+  Download, 
+  Upload as UploadIcon, 
+  RefreshCw, 
+  CheckCircle, 
   Circle,
   Eye,
   EyeOff
@@ -470,6 +470,9 @@ export default function App() {
             </Button>
             <Button variant="secondary" icon={Package} onClick={() => setShowMaterialModal(true)}>
               Materials
+            </Button>
+            <Button variant="outline" icon={Download} onClick={handlePrint} title="Save as PDF">
+              Download PDF
             </Button>
             <Button variant="primary" icon={Printer} onClick={handlePrint}>
               Print
