@@ -45,7 +45,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
   };
 
   return (
-    <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`} title={title}>
+    <button type="button" onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`} title={title}>
       {Icon && <Icon size={18} />}
       {children}
     </button>
@@ -59,7 +59,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center p-4 border-b border-slate-100 shrink-0">
           <h3 className="text-lg font-bold text-slate-800">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X size={20} />
           </button>
         </div>
@@ -312,54 +312,86 @@ export default function App() {
     }, 100);
   };
 
-  // --- AUTO-LOAD PDF LIBRARY & DOWNLOAD ---
+  // --- SELF-CONTAINED PDF LOADER & GENERATOR ---
   const handleDownloadPDF = async () => {
     setIsDownloading(true);
     
-    // 1. Check/Load Library
-    if (!window.html2pdf) {
-      try {
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-          script.onload = resolve;
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-      } catch (err) {
-        alert("Failed to load PDF engine. Please check your internet connection.");
-        setIsDownloading(false);
-        return;
-      }
-    }
-
-    // 2. Prepare Element
-    const element = document.getElementById('invoice-content');
-    
-    // Temporarily force desktop width for cleaner PDF generation on mobile
-    const originalStyle = element.style.cssText;
-    element.style.minWidth = '800px'; 
-    element.style.padding = '40px';
-
-    // 3. Configure & Save
-    const opt = {
-      margin: 0.5,
-      filename: `${invoice.number}_${invoice.to.name.replace(/\s+/g, '_') || 'invoice'}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true }, 
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    // 1. Library Loader
+    const loadPdfLibrary = () => {
+      return new Promise((resolve, reject) => {
+        if (window.html2pdf) {
+          resolve(window.html2pdf);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+        script.onload = () => resolve(window.html2pdf);
+        script.onerror = () => reject(new Error("Failed to load PDF library"));
+        document.body.appendChild(script);
+      });
     };
 
-    window.html2pdf().set(opt).from(element).save().then(() => {
+    try {
+      const html2pdf = await loadPdfLibrary();
+      const originalElement = document.getElementById('invoice-content');
+
+      // 2. Clone & Prepare for Capture
+      const clone = originalElement.cloneNode(true);
+      
+      // Force desktop width on the clone & position it off-screen in a container
+      const container = document.createElement('div');
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      container.style.top = '0';
+      container.style.width = '800px'; // Force Standard desktop/A4 width
+      container.appendChild(clone);
+      document.body.appendChild(container);
+
+      // 3. Transform Inputs for "Print Look"
+      const inputs = clone.querySelectorAll('textarea, input, select');
+      inputs.forEach(input => {
+        const textValue = input.value || '';
+        const textNode = document.createElement('div');
+        textNode.innerText = textValue;
+        
+        textNode.style.whiteSpace = 'pre-wrap';
+        textNode.style.fontFamily = 'inherit';
+        textNode.style.fontSize = 'inherit';
+        textNode.style.fontWeight = 'inherit';
+        textNode.style.color = '#334155'; // slate-700
+        
+        if (input.parentNode) {
+            input.parentNode.replaceChild(textNode, input);
+        }
+      });
+
+      const buttons = clone.querySelectorAll('button, .no-print');
+      buttons.forEach(btn => btn.remove());
+      
+      // 4. Configure & Save with Page Breaks
+      const opt = {
+        margin: 0, // We have padding in CSS
+        filename: `${invoice.number}_${invoice.to.name.replace(/\s+/g, '_') || 'invoice'}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, scrollY: 0 }, 
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+        // Enable auto-paging with CSS break avoidance
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } 
+      };
+
+      await html2pdf().set(opt).from(clone).save();
+      
       // Cleanup
-      element.style.cssText = originalStyle;
+      document.body.removeChild(container);
       setIsDownloading(false);
-    }).catch(err => {
-      console.error(err);
-      element.style.cssText = originalStyle;
+
+    } catch (err) {
+      console.error("PDF Error:", err);
       setIsDownloading(false);
-      alert("Error generating PDF. Please try the 'Print' button as a backup.");
-    });
+      if (confirm("Automatic PDF generation failed. Use standard Print dialog?")) {
+        handlePrint();
+      }
+    }
   };
 
   const handleLogoUpload = (e) => {
@@ -843,7 +875,7 @@ export default function App() {
                   {invoice.items.map((item) => {
                     const description = item.description || '';
                     return (
-                    <tr key={item.id} className="border-b border-slate-50 group hover:bg-slate-50/50">
+                    <tr key={item.id} className="border-b border-slate-50 group hover:bg-slate-50/50 break-inside-avoid page-break-inside-avoid">
                       <td className="py-4 pr-4 align-top">
                         <div className="flex gap-4">
                           {/* Item Image Display */}
@@ -964,7 +996,7 @@ export default function App() {
             </div>
 
             {/* Totals Section */}
-            <div className="bg-slate-50 p-6 md:p-12 border-t border-slate-100 print:bg-transparent">
+            <div className="bg-slate-50 p-6 md:p-12 border-t border-slate-100 print:bg-transparent break-inside-avoid">
               <div className="flex flex-col md:flex-row justify-between items-end gap-12">
                 <div className="w-full md:w-1/2">
                   <h3 className="text-xs font-bold uppercase text-slate-400 mb-2">Notes</h3>
@@ -1371,6 +1403,9 @@ export default function App() {
           @page { margin: 0; size: auto; }
           body { background: white; }
           .no-print { display: none !important; }
+        }
+        tr, .break-inside-avoid {
+          page-break-inside: avoid;
         }
       `}</style>
     </div>
