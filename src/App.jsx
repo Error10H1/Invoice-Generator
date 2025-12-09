@@ -25,8 +25,12 @@ import {
   Eye,
   EyeOff,
   FilePlus,
-  Copy
+  Copy,
+  Building2,
+  Globe
 } from 'lucide-react';
+
+// --- Components ---
 
 const Card = ({ children, className = "" }) => (
   <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>
@@ -74,7 +78,8 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   );
 };
 
-// Robust ID generation to prevent overwrite collisions
+// --- Initial Data / Utils ---
+
 const generateId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -105,14 +110,14 @@ const DEFAULT_MATERIALS = [
   { id: 'mat2', name: 'Hosting Setup', price: 75, image: null },
 ];
 
-const DEFAULT_LOGO_PROFILES = [];
+const DEFAULT_BRANDING_PROFILES = [];
 
 const DEFAULT_INVOICE_STATE = {
   number: 'INV-001',
   name: '', 
   date: new Date().toISOString().split('T')[0],
   dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  from: { name: 'Your Company', address: '123 Creative Way\nDesign City, ST 12345' },
+  from: { name: 'Your Company', address: '123 Creative Way\nDesign City, ST 12345', extra: '' },
   to: { name: 'Client Name', address: '456 Client Road\nBusiness Town, ST 67890' },
   items: [
     { id: 'init_item', description: 'Initial Consultation', quantity: 1, price: 150, image: null }
@@ -122,7 +127,10 @@ const DEFAULT_INVOICE_STATE = {
   hideMarkup: false, 
 };
 
+// --- Main App ---
+
 export default function App() {
+  // --- Data Loading Hooks ---
   const usePersistentState = (key, defaultValue) => {
     const [state, setState] = useState(() => {
       try {
@@ -145,10 +153,19 @@ export default function App() {
     return [state, setState];
   };
 
+  // --- State ---
+
   const [invoice, setInvoice] = useState(() => {
     try {
       const saved = localStorage.getItem('proInvoice_currentDraft');
-      return saved ? { ...DEFAULT_INVOICE_STATE, ...JSON.parse(saved) } : { ...DEFAULT_INVOICE_STATE, id: generateId() };
+      // Merge defaults to ensure all fields exist
+      const parsed = saved ? JSON.parse(saved) : DEFAULT_INVOICE_STATE;
+      return { 
+        ...DEFAULT_INVOICE_STATE, 
+        ...parsed, 
+        id: parsed.id || generateId(),
+        from: { ...DEFAULT_INVOICE_STATE.from, ...parsed.from } // Ensure 'from' object has all fields
+      };
     } catch(e) { 
       return { ...DEFAULT_INVOICE_STATE, id: generateId() }; 
     }
@@ -157,20 +174,22 @@ export default function App() {
   const [markupProfiles, setMarkupProfiles] = usePersistentState('proInvoice_markups', DEFAULT_MARKUP_PROFILES);
   const [depositProfiles, setDepositProfiles] = usePersistentState('proInvoice_deposits', DEFAULT_DEPOSIT_PROFILES);
   const [savedMaterials, setSavedMaterials] = usePersistentState('proInvoice_materials', DEFAULT_MATERIALS);
-  const [logoProfiles, setLogoProfiles] = usePersistentState('proInvoice_logos', DEFAULT_LOGO_PROFILES);
+  const [brandingProfiles, setBrandingProfiles] = usePersistentState('proInvoice_branding', DEFAULT_BRANDING_PROFILES);
   const [savedInvoices, setSavedInvoices] = usePersistentState('proInvoice_invoices', []);
   
   const [preferences, setPreferences] = usePersistentState('proInvoice_prefs', {
     selectedMarkupId: 'm1',
     selectedDepositId: 'd1',
-    selectedLogoId: '',
+    selectedBrandingId: '',
     taxRate: 8.25
   });
 
+  // Helper to update individual preferences
   const setPreference = (key, value) => {
     setPreferences(prev => ({ ...prev, [key]: value }));
   };
 
+  // UI State
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -178,16 +197,31 @@ export default function App() {
   const [isPrintMode, setIsPrintMode] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // Temp State for modals
   const [tempMaterialImage, setTempMaterialImage] = useState(null);
   const [saveName, setSaveName] = useState('');
+  
+  // Temp State for Branding Creation
+  const [newBrand, setNewBrand] = useState({
+    profileName: '',
+    companyName: '',
+    address: '',
+    extra: '',
+    logo: null
+  });
+
   const fileInputRef = useRef(null);
 
+  // --- Effects ---
+  
   useEffect(() => {
     const timer = setTimeout(() => {
       localStorage.setItem('proInvoice_currentDraft', JSON.stringify(invoice));
     }, 500);
     return () => clearTimeout(timer);
   }, [invoice]);
+
+  // --- Calculations ---
 
   const totals = useMemo(() => {
     const subtotal = invoice.items.reduce((acc, item) => acc + (item.quantity * item.price), 0);
@@ -201,7 +235,6 @@ export default function App() {
     }
 
     const subtotalWithMarkup = subtotal + markupAmount;
-    
     const taxAmount = subtotalWithMarkup * (preferences.taxRate / 100);
     const total = subtotalWithMarkup + taxAmount;
 
@@ -234,13 +267,68 @@ export default function App() {
     };
   }, [invoice.items, invoice.isPaid, preferences, markupProfiles, depositProfiles]);
 
-  const activeLogo = useMemo(() => logoProfiles.find(l => l.id === preferences.selectedLogoId), [logoProfiles, preferences.selectedLogoId]);
+  const activeBranding = useMemo(() => brandingProfiles.find(l => l.id === preferences.selectedBrandingId), [brandingProfiles, preferences.selectedBrandingId]);
+
+  // --- Handlers ---
+
+  const handleBrandSelect = (id) => {
+    setPreference('selectedBrandingId', id);
+    const profile = brandingProfiles.find(b => b.id === id);
+    if (profile) {
+      // Auto-populate invoice details from profile
+      setInvoice(prev => ({
+        ...prev,
+        from: {
+          name: profile.companyName,
+          address: profile.address,
+          extra: profile.extra
+        }
+      }));
+    }
+  };
+
+  const handleNewBrandLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewBrand(prev => ({ ...prev, logo: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveNewBrand = () => {
+    if (newBrand.profileName && newBrand.companyName) {
+      const brandToSave = {
+        id: generateId(),
+        ...newBrand
+      };
+      setBrandingProfiles([...brandingProfiles, brandToSave]);
+      // Reset form
+      setNewBrand({
+        profileName: '',
+        companyName: '',
+        address: '',
+        extra: '',
+        logo: null
+      });
+    }
+  };
 
   const handleNewInvoice = () => {
     if (confirm('Start a new invoice? This will clear the current form.')) {
+      // Preserve current branding if exists
+      const currentFrom = activeBranding ? {
+          name: activeBranding.companyName,
+          address: activeBranding.address,
+          extra: activeBranding.extra
+      } : DEFAULT_INVOICE_STATE.from;
+
       setInvoice({
         ...DEFAULT_INVOICE_STATE,
         id: generateId(),
+        from: currentFrom,
         number: 'INV-' + Math.floor(1000 + Math.random() * 9000), 
         date: new Date().toISOString().split('T')[0],
         dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -309,7 +397,6 @@ export default function App() {
   const handleDownloadPDF = async () => {
     setIsDownloading(true);
     
-    // Check for offline status before attempting to load external script
     if (!window.html2pdf && !navigator.onLine) {
         alert("You are currently offline. The 'Download PDF' feature requires an internet connection to load the PDF engine. Please use the 'Print' button and select 'Save as PDF' instead.");
         setIsDownloading(false);
@@ -333,7 +420,6 @@ export default function App() {
     try {
       const html2pdf = await loadPdfLibrary();
       const originalElement = document.getElementById('invoice-content');
-
       const clone = originalElement.cloneNode(true);
       
       const container = document.createElement('div');
@@ -387,23 +473,6 @@ export default function App() {
     }
   };
 
-  const handleLogoUpload = (e) => {
-    const file = e.target.files[0];
-    const nameInput = document.getElementById('newLogoName');
-    const name = nameInput?.value || file.name;
-
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const newLogo = { id: generateId(), name: name, data: reader.result };
-        setLogoProfiles([...logoProfiles, newLogo]);
-        if (!preferences.selectedLogoId) setPreference('selectedLogoId', newLogo.id);
-        if (nameInput) nameInput.value = '';
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleMaterialImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -417,8 +486,6 @@ export default function App() {
 
   const handleSaveInvoice = (asNew = false) => {
     const name = saveName.trim() || invoice.name || `Invoice ${invoice.number}`;
-    
-    // Explicitly generate a NEW ID if 'Save as New' is selected, otherwise keep current
     const idToUse = asNew ? generateId() : invoice.id;
     
     const invoiceToSave = {
@@ -460,10 +527,6 @@ export default function App() {
     setSavedInvoices(savedInvoices.filter(inv => inv.id !== id));
   };
 
-  const togglePaymentStatus = () => {
-    setInvoice(prev => ({ ...prev, isPaid: !prev.isPaid }));
-  };
-
   const handleBackupData = () => {
     const backup = {
       version: 1,
@@ -472,7 +535,7 @@ export default function App() {
         markupProfiles,
         depositProfiles,
         savedMaterials,
-        logoProfiles,
+        brandingProfiles,
         savedInvoices,
         preferences,
         currentDraft: invoice
@@ -504,7 +567,8 @@ export default function App() {
             if(data.markupProfiles) setMarkupProfiles(data.markupProfiles);
             if(data.depositProfiles) setDepositProfiles(data.depositProfiles);
             if(data.savedMaterials) setSavedMaterials(data.savedMaterials);
-            if(data.logoProfiles) setLogoProfiles(data.logoProfiles);
+            if(data.brandingProfiles) setBrandingProfiles(data.brandingProfiles);
+            if(data.logoProfiles) setBrandingProfiles(data.logoProfiles); // Legacy support
             if(data.savedInvoices) setSavedInvoices(data.savedInvoices);
             if(data.preferences) setPreferences(data.preferences);
             if(data.currentDraft) setInvoice(data.currentDraft);
@@ -570,30 +634,30 @@ export default function App() {
             
             <Card className="p-5 space-y-4">
                <h2 className="font-semibold text-slate-700 flex items-center gap-2">
-                <ImageIcon size={18} /> Branding
+                <Building2 size={18} /> Branding Profile
               </h2>
               <div>
-                <label className="text-xs font-semibold uppercase text-slate-400 mb-1 block">Selected Logo</label>
+                <label className="text-xs font-semibold uppercase text-slate-400 mb-1 block">Active Brand</label>
                 <div className="relative">
                   <select 
-                    value={preferences.selectedLogoId} 
-                    onChange={e => setPreference('selectedLogoId', e.target.value)}
+                    value={preferences.selectedBrandingId} 
+                    onChange={e => handleBrandSelect(e.target.value)}
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-sm appearance-none outline-none"
                   >
-                    <option value="">No Logo</option>
-                    {logoProfiles.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
+                    <option value="">Default (No Profile)</option>
+                    {brandingProfiles.map(p => (
+                      <option key={p.id} value={p.id}>{p.profileName}</option>
                     ))}
                   </select>
                   <ChevronDown className="absolute right-3 top-2.5 text-slate-400 pointer-events-none" size={16} />
                 </div>
-                {activeLogo && (
+                {activeBranding && activeBranding.logo && (
                   <div className="mt-3 p-2 border border-slate-100 bg-slate-50 rounded flex justify-center">
-                    <img src={activeLogo.data} alt="Preview" className="h-12 object-contain" />
+                    <img src={activeBranding.logo} alt="Brand Logo" className="h-12 object-contain" />
                   </div>
                 )}
-                 {logoProfiles.length === 0 && (
-                   <p className="text-xs text-slate-400 mt-2 italic">Add logos in Settings</p>
+                 {brandingProfiles.length === 0 && (
+                   <p className="text-xs text-slate-400 mt-2 italic">Add Brand Profiles in Settings</p>
                  )}
               </div>
             </Card>
@@ -770,9 +834,9 @@ export default function App() {
             <div className="p-6 md:p-12 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start gap-6 md:gap-0">
               <div className="flex-1 w-full md:w-auto">
                 
-                {activeLogo ? (
+                {activeBranding && activeBranding.logo ? (
                    <div className="mb-6">
-                     <img src={activeLogo.data} alt="Company Logo" className="h-16 md:h-20 object-contain" />
+                     <img src={activeBranding.logo} alt="Company Logo" className="h-16 md:h-20 object-contain" />
                    </div>
                 ) : (
                    <div className="h-4"></div>
@@ -791,15 +855,26 @@ export default function App() {
                 )}
                 
                 {!isPrintMode ? (
-                  <textarea
-                    value={invoice.from.address}
-                    onChange={e => setInvoice(prev => ({...prev, from: {...prev.from, address: e.target.value}}))}
-                    className="mt-2 text-slate-500 bg-transparent border-none focus:ring-0 p-0 w-full resize-none text-sm"
-                    placeholder="Your Address..."
-                    rows={3}
-                  />
+                  <div className="w-full">
+                    <textarea
+                        value={invoice.from.address}
+                        onChange={e => setInvoice(prev => ({...prev, from: {...prev.from, address: e.target.value}}))}
+                        className="mt-2 text-slate-500 bg-transparent border-none focus:ring-0 p-0 w-full resize-none text-sm block"
+                        placeholder="Your Address..."
+                        rows={3}
+                    />
+                    <input
+                        value={invoice.from.extra || ''}
+                        onChange={e => setInvoice(prev => ({...prev, from: {...prev.from, extra: e.target.value}}))}
+                        className="mt-1 text-slate-400 bg-transparent border-none focus:ring-0 p-0 w-full text-xs block"
+                        placeholder="Website, Email, Phone..."
+                    />
+                  </div>
                 ) : (
-                  <pre className="mt-2 text-slate-500 text-sm font-sans whitespace-pre-wrap">{invoice.from.address}</pre>
+                  <div>
+                    <pre className="mt-2 text-slate-500 text-sm font-sans whitespace-pre-wrap">{invoice.from.address}</pre>
+                    {invoice.from.extra && <p className="mt-1 text-slate-400 text-xs">{invoice.from.extra}</p>}
+                  </div>
                 )}
               </div>
 
@@ -1099,7 +1174,6 @@ export default function App() {
 
       <Modal isOpen={showMaterialModal} onClose={() => { setShowMaterialModal(false); setTempMaterialImage(null); }} title="Manage Saved Materials">
         <div className="space-y-6">
-          
           <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
             <h4 className="text-sm font-bold text-slate-700 mb-3">Add New Material</h4>
             <div className="space-y-3">
@@ -1116,14 +1190,12 @@ export default function App() {
                   className="w-24 border p-2 rounded text-sm"
                 />
               </div>
-              
               <div className="flex items-center gap-3">
                 <label className="cursor-pointer bg-white border border-slate-300 rounded px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors flex items-center gap-2">
                    <ImageIcon size={16} />
                    <span>{tempMaterialImage ? 'Change Image' : 'Add Image'}</span>
                    <input type="file" accept="image/*" className="hidden" onChange={handleMaterialImageUpload}/>
                 </label>
-                
                 {tempMaterialImage && (
                   <div className="relative group">
                     <img src={tempMaterialImage} alt="preview" className="h-10 w-10 object-cover rounded border border-slate-200" />
@@ -1135,7 +1207,6 @@ export default function App() {
                     </button>
                   </div>
                 )}
-
                 <div className="flex-1 text-right">
                   <Button 
                     onClick={() => {
@@ -1161,7 +1232,6 @@ export default function App() {
               </div>
             </div>
           </div>
-
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 border-b">
@@ -1248,41 +1318,78 @@ export default function App() {
           
            <div>
             <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2">
-              <ImageIcon size={16}/> Logo Profiles
+              <Building2 size={16}/> Branding Profiles
             </h4>
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
-               <div className="flex flex-col gap-2">
+               <div className="space-y-3">
                  <input 
-                   id="newLogoName" 
-                   placeholder="Profile Name (e.g., Dark Logo)" 
+                   value={newBrand.profileName}
+                   onChange={e => setNewBrand(p => ({...p, profileName: e.target.value}))}
+                   placeholder="Profile Name (e.g. My Freelance Brand)" 
                    className="border p-2 rounded text-sm w-full"
                  />
+                 <input 
+                   value={newBrand.companyName}
+                   onChange={e => setNewBrand(p => ({...p, companyName: e.target.value}))}
+                   placeholder="Company Name (Appears on Invoice)" 
+                   className="border p-2 rounded text-sm w-full"
+                 />
+                 <textarea 
+                   value={newBrand.address}
+                   onChange={e => setNewBrand(p => ({...p, address: e.target.value}))}
+                   placeholder="Company Address" 
+                   className="border p-2 rounded text-sm w-full resize-y h-20"
+                 />
+                 <input 
+                   value={newBrand.extra}
+                   onChange={e => setNewBrand(p => ({...p, extra: e.target.value}))}
+                   placeholder="Extra Info (Website, Email, Tax ID...)" 
+                   className="border p-2 rounded text-sm w-full"
+                 />
+                 
                  <div className="flex gap-2">
                    <label className="flex-1 cursor-pointer bg-white border border-slate-300 border-dashed rounded flex items-center justify-center p-2 text-sm text-slate-500 hover:bg-slate-50 transition-colors">
                      <Upload size={16} className="mr-2"/>
-                     <span>Upload Image...</span>
-                     <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload}/>
+                     <span>{newBrand.logo ? 'Change Logo' : 'Upload Logo'}</span>
+                     <input type="file" accept="image/*" className="hidden" onChange={handleNewBrandLogoUpload}/>
                    </label>
+                   {newBrand.logo && (
+                     <div className="h-10 w-10 border rounded bg-white flex items-center justify-center">
+                       <img src={newBrand.logo} className="max-h-full max-w-full" alt="Preview"/>
+                     </div>
+                   )}
+                 </div>
+                 <div className="flex justify-end">
+                    <Button onClick={handleSaveNewBrand} icon={Plus}>Add Profile</Button>
                  </div>
                </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              {logoProfiles.map(p => (
-                <div key={p.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded border border-slate-100">
-                  <div className="w-10 h-10 bg-white rounded flex items-center justify-center border border-slate-200 flex-shrink-0">
-                     <img src={p.data} alt={p.name} className="max-w-full max-h-full p-1" />
+            <div className="grid grid-cols-1 gap-2">
+              {brandingProfiles.map(p => (
+                <div key={p.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded border border-slate-100 justify-between">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    {p.logo ? (
+                      <div className="w-10 h-10 bg-white rounded flex items-center justify-center border border-slate-200 flex-shrink-0">
+                         <img src={p.logo} alt={p.profileName} className="max-w-full max-h-full p-1" />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 bg-white rounded flex items-center justify-center border border-slate-200 flex-shrink-0 text-slate-300">
+                        <Building2 size={20}/>
+                      </div>
+                    )}
+                    <div className="overflow-hidden">
+                       <span className="text-sm font-medium truncate block">{p.profileName}</span>
+                       <span className="text-xs text-slate-500 truncate block">{p.companyName}</span>
+                    </div>
                   </div>
-                  <div className="flex-1 overflow-hidden">
-                     <span className="text-sm font-medium truncate block">{p.name}</span>
-                  </div>
-                  <button onClick={() => setLogoProfiles(logoProfiles.filter(l => l.id !== p.id))} className="text-slate-400 hover:text-red-500 p-1">
-                    <Trash2 size={14} />
+                  <button onClick={() => setBrandingProfiles(brandingProfiles.filter(b => b.id !== p.id))} className="text-slate-400 hover:text-red-500 p-2">
+                    <Trash2 size={16} />
                   </button>
                 </div>
               ))}
-               {logoProfiles.length === 0 && (
-                  <div className="col-span-2 text-center text-slate-400 text-sm py-2">No logos saved yet.</div>
+               {brandingProfiles.length === 0 && (
+                  <div className="text-center text-slate-400 text-sm py-2">No profiles saved yet.</div>
                )}
             </div>
           </div>
