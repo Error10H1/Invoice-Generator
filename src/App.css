@@ -23,7 +23,9 @@ import {
   CheckCircle, 
   Circle,
   Eye,
-  EyeOff
+  EyeOff,
+  FilePlus,
+  Copy // Added Copy icon
 } from 'lucide-react';
 
 // --- Components ---
@@ -258,6 +260,23 @@ export default function App() {
 
   // --- Handlers ---
 
+  const handleNewInvoice = () => {
+    if (confirm('Start a new invoice? This will clear the current form.')) {
+      setInvoice({
+        ...DEFAULT_INVOICE_STATE,
+        id: generateId(),
+        // Optional: Auto-increment or randomize number to suggest newness
+        number: 'INV-' + Math.floor(1000 + Math.random() * 9000), 
+        date: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        items: [
+          { id: generateId(), description: 'Initial Consultation', quantity: 1, price: 150, image: null }
+        ]
+      });
+      setSaveName('');
+    }
+  };
+
   const handleAddItem = (item = null) => {
     if (item) {
       const newItem = { 
@@ -422,27 +441,40 @@ export default function App() {
     }
   };
 
-  const handleSaveInvoice = () => {
+  // --- REVISED SAVE FUNCTION ---
+  const handleSaveInvoice = (asNew = false) => {
     const name = saveName.trim() || invoice.name || `Invoice ${invoice.number}`;
+    
+    // If saving as new, generate a new ID immediately
+    const idToUse = asNew ? generateId() : invoice.id;
+    
     const invoiceToSave = {
       ...invoice,
+      id: idToUse,
       name,
       savedAt: new Date().toISOString(),
-      config: { ...preferences } // Save snapshot of preferences at time of save
+      config: { ...preferences } 
     };
 
-    const existingIndex = savedInvoices.findIndex(inv => inv.id === invoice.id);
-    let newSavedInvoices;
-    
-    if (existingIndex >= 0) {
-      newSavedInvoices = [...savedInvoices];
-      newSavedInvoices[existingIndex] = invoiceToSave;
+    if (asNew) {
+        // Just add it to the list
+        setSavedInvoices([...savedInvoices, invoiceToSave]);
+        // Update current view to look at this new ID so future 'regular' saves update this one
+        setInvoice(invoiceToSave); 
     } else {
-      newSavedInvoices = [...savedInvoices, invoiceToSave];
+        // Update existing logic
+        const existingIndex = savedInvoices.findIndex(inv => inv.id === invoice.id);
+        if (existingIndex >= 0) {
+            const newSavedInvoices = [...savedInvoices];
+            newSavedInvoices[existingIndex] = invoiceToSave;
+            setSavedInvoices(newSavedInvoices);
+        } else {
+            setSavedInvoices([...savedInvoices, invoiceToSave]);
+        }
+        // Update name in current view if changed
+        setInvoice(prev => ({ ...prev, name })); 
     }
 
-    setSavedInvoices(newSavedInvoices);
-    setInvoice(prev => ({ ...prev, name })); 
     setShowSaveModal(false);
     setSaveName('');
   };
@@ -541,6 +573,9 @@ export default function App() {
           
           <div className="flex flex-wrap gap-2 w-full lg:w-auto">
             <div className="flex gap-2 mr-2 border-r border-slate-200 pr-2">
+               <Button variant="secondary" icon={FilePlus} onClick={handleNewInvoice} title="Create New Invoice">
+                New
+               </Button>
                <Button variant="secondary" icon={FolderOpen} onClick={() => setShowLoadModal(true)}>
                 Load
               </Button>
@@ -1075,8 +1110,9 @@ export default function App() {
               autoFocus
             />
           </div>
-          <div className="flex justify-end pt-2">
-            <Button onClick={handleSaveInvoice} icon={Save}>Save Invoice</Button>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button onClick={() => handleSaveInvoice(true)} variant="outline" icon={Copy}>Save as New</Button>
+            <Button onClick={() => handleSaveInvoice(false)} icon={Save}>Save Changes</Button>
           </div>
         </div>
       </Modal>
