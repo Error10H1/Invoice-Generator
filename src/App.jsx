@@ -23,10 +23,10 @@ import {
   CheckCircle, 
   Circle,
   Eye,
-  EyeOff
+  EyeOff,
+  FilePlus,
+  Copy
 } from 'lucide-react';
-
-// --- Components ---
 
 const Card = ({ children, className = "" }) => (
   <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>
@@ -45,7 +45,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
   };
 
   return (
-    <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`} title={title}>
+    <button type="button" onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`} title={title}>
       {Icon && <Icon size={18} />}
       {children}
     </button>
@@ -59,7 +59,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center p-4 border-b border-slate-100 shrink-0">
           <h3 className="text-lg font-bold text-slate-800">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X size={20} />
           </button>
         </div>
@@ -74,9 +74,13 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   );
 };
 
-// --- Initial Data / Utils ---
-
-const generateId = () => Math.random().toString(36).substr(2, 9);
+// Robust ID generation to prevent overwrite collisions
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substr(2, 9);
+};
 
 const CURRENCY_FORMAT = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -104,7 +108,6 @@ const DEFAULT_MATERIALS = [
 const DEFAULT_LOGO_PROFILES = [];
 
 const DEFAULT_INVOICE_STATE = {
-  // ID is generated on init to ensure key uniqueness if not loaded
   number: 'INV-001',
   name: '', 
   date: new Date().toISOString().split('T')[0],
@@ -115,15 +118,11 @@ const DEFAULT_INVOICE_STATE = {
     { id: 'init_item', description: 'Initial Consultation', quantity: 1, price: 150, image: null }
   ],
   notes: 'Thank you for your business. Please send payment within 14 days.',
-  isPaid: false, // New state for payment status
-  hideMarkup: false, // New state for hiding markup
+  isPaid: false, 
+  hideMarkup: false, 
 };
 
-// --- Main App ---
-
 export default function App() {
-  // --- Data Loading Hooks ---
-  // Helper to safely load JSON from localStorage
   const usePersistentState = (key, defaultValue) => {
     const [state, setState] = useState(() => {
       try {
@@ -146,27 +145,21 @@ export default function App() {
     return [state, setState];
   };
 
-  // --- State ---
-
-  // Invoice Data (Active Draft)
   const [invoice, setInvoice] = useState(() => {
     try {
       const saved = localStorage.getItem('proInvoice_currentDraft');
-      // Merge defaults to ensure new fields (like isPaid, hideMarkup) exist in old saved data
       return saved ? { ...DEFAULT_INVOICE_STATE, ...JSON.parse(saved) } : { ...DEFAULT_INVOICE_STATE, id: generateId() };
     } catch(e) { 
       return { ...DEFAULT_INVOICE_STATE, id: generateId() }; 
     }
   });
 
-  // Settings / Profiles (Using Custom Hook for Auto-Persistence)
   const [markupProfiles, setMarkupProfiles] = usePersistentState('proInvoice_markups', DEFAULT_MARKUP_PROFILES);
   const [depositProfiles, setDepositProfiles] = usePersistentState('proInvoice_deposits', DEFAULT_DEPOSIT_PROFILES);
   const [savedMaterials, setSavedMaterials] = usePersistentState('proInvoice_materials', DEFAULT_MATERIALS);
   const [logoProfiles, setLogoProfiles] = usePersistentState('proInvoice_logos', DEFAULT_LOGO_PROFILES);
   const [savedInvoices, setSavedInvoices] = usePersistentState('proInvoice_invoices', []);
   
-  // Preferences (Persist selection state)
   const [preferences, setPreferences] = usePersistentState('proInvoice_prefs', {
     selectedMarkupId: 'm1',
     selectedDepositId: 'd1',
@@ -174,39 +167,31 @@ export default function App() {
     taxRate: 8.25
   });
 
-  // Helper to update individual preferences
   const setPreference = (key, value) => {
     setPreferences(prev => ({ ...prev, [key]: value }));
   };
 
-  // UI State
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [isPrintMode, setIsPrintMode] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  // Temp State for modals
   const [tempMaterialImage, setTempMaterialImage] = useState(null);
   const [saveName, setSaveName] = useState('');
-  const fileInputRef = useRef(null); // For Restore functionality
+  const fileInputRef = useRef(null);
 
-  // --- Effects ---
-  
-  // Auto-save Active Draft
   useEffect(() => {
     const timer = setTimeout(() => {
       localStorage.setItem('proInvoice_currentDraft', JSON.stringify(invoice));
-    }, 500); // Debounce saves to 500ms
+    }, 500);
     return () => clearTimeout(timer);
   }, [invoice]);
-
-  // --- Calculations ---
 
   const totals = useMemo(() => {
     const subtotal = invoice.items.reduce((acc, item) => acc + (item.quantity * item.price), 0);
     
-    // Markup Calculation
     const activeMarkup = markupProfiles.find(p => p.id === preferences.selectedMarkupId);
     let markupAmount = 0;
     if (activeMarkup) {
@@ -217,11 +202,9 @@ export default function App() {
 
     const subtotalWithMarkup = subtotal + markupAmount;
     
-    // Tax Calculation
     const taxAmount = subtotalWithMarkup * (preferences.taxRate / 100);
     const total = subtotalWithMarkup + taxAmount;
 
-    // Deposit Calculation
     const activeDeposit = depositProfiles.find(p => p.id === preferences.selectedDepositId);
     let depositAmount = 0;
     if (activeDeposit) {
@@ -230,12 +213,10 @@ export default function App() {
         : activeDeposit.value;
     }
 
-    // Logic for Paid vs Unpaid
     let balanceDue;
     if (invoice.isPaid) {
       balanceDue = 0;
     } else {
-      // Guard against deposit > total
       if (depositAmount > total) depositAmount = total;
       balanceDue = total - depositAmount;
     }
@@ -255,7 +236,21 @@ export default function App() {
 
   const activeLogo = useMemo(() => logoProfiles.find(l => l.id === preferences.selectedLogoId), [logoProfiles, preferences.selectedLogoId]);
 
-  // --- Handlers ---
+  const handleNewInvoice = () => {
+    if (confirm('Start a new invoice? This will clear the current form.')) {
+      setInvoice({
+        ...DEFAULT_INVOICE_STATE,
+        id: generateId(),
+        number: 'INV-' + Math.floor(1000 + Math.random() * 9000), 
+        date: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        items: [
+          { id: generateId(), description: 'Initial Consultation', quantity: 1, price: 150, image: null }
+        ]
+      });
+      setSaveName('');
+    }
+  };
 
   const handleAddItem = (item = null) => {
     if (item) {
@@ -311,6 +306,87 @@ export default function App() {
     }, 100);
   };
 
+  const handleDownloadPDF = async () => {
+    setIsDownloading(true);
+    
+    // Check for offline status before attempting to load external script
+    if (!window.html2pdf && !navigator.onLine) {
+        alert("You are currently offline. The 'Download PDF' feature requires an internet connection to load the PDF engine. Please use the 'Print' button and select 'Save as PDF' instead.");
+        setIsDownloading(false);
+        return;
+    }
+
+    const loadPdfLibrary = () => {
+      return new Promise((resolve, reject) => {
+        if (window.html2pdf) {
+          resolve(window.html2pdf);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+        script.onload = () => resolve(window.html2pdf);
+        script.onerror = () => reject(new Error("Failed to load PDF library"));
+        document.body.appendChild(script);
+      });
+    };
+
+    try {
+      const html2pdf = await loadPdfLibrary();
+      const originalElement = document.getElementById('invoice-content');
+
+      const clone = originalElement.cloneNode(true);
+      
+      const container = document.createElement('div');
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      container.style.top = '0';
+      container.style.width = '800px'; 
+      container.appendChild(clone);
+      document.body.appendChild(container);
+
+      const inputs = clone.querySelectorAll('textarea, input, select');
+      inputs.forEach(input => {
+        const textValue = input.value || '';
+        const textNode = document.createElement('div');
+        textNode.innerText = textValue;
+        
+        textNode.style.whiteSpace = 'pre-wrap';
+        textNode.style.fontFamily = 'inherit';
+        textNode.style.fontSize = 'inherit';
+        textNode.style.fontWeight = 'inherit';
+        textNode.style.color = '#334155'; 
+        
+        if (input.parentNode) {
+            input.parentNode.replaceChild(textNode, input);
+        }
+      });
+
+      const buttons = clone.querySelectorAll('button, .no-print');
+      buttons.forEach(btn => btn.remove());
+      
+      const opt = {
+        margin: 0, 
+        filename: `${invoice.number}_${invoice.to.name.replace(/\s+/g, '_') || 'invoice'}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, scrollY: 0 }, 
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } 
+      };
+
+      await html2pdf().set(opt).from(clone).save();
+      
+      document.body.removeChild(container);
+      setIsDownloading(false);
+
+    } catch (err) {
+      console.error("PDF Error:", err);
+      setIsDownloading(false);
+      if (confirm("Automatic PDF generation failed (likely due to connection). Use standard Print dialog?")) {
+        handlePrint();
+      }
+    }
+  };
+
   const handleLogoUpload = (e) => {
     const file = e.target.files[0];
     const nameInput = document.getElementById('newLogoName');
@@ -339,27 +415,35 @@ export default function App() {
     }
   };
 
-  const handleSaveInvoice = () => {
+  const handleSaveInvoice = (asNew = false) => {
     const name = saveName.trim() || invoice.name || `Invoice ${invoice.number}`;
+    
+    // Explicitly generate a NEW ID if 'Save as New' is selected, otherwise keep current
+    const idToUse = asNew ? generateId() : invoice.id;
+    
     const invoiceToSave = {
       ...invoice,
+      id: idToUse,
       name,
       savedAt: new Date().toISOString(),
-      config: { ...preferences } // Save snapshot of preferences at time of save
+      config: { ...preferences } 
     };
 
-    const existingIndex = savedInvoices.findIndex(inv => inv.id === invoice.id);
-    let newSavedInvoices;
-    
-    if (existingIndex >= 0) {
-      newSavedInvoices = [...savedInvoices];
-      newSavedInvoices[existingIndex] = invoiceToSave;
+    if (asNew) {
+        setSavedInvoices([...savedInvoices, invoiceToSave]);
+        setInvoice(invoiceToSave); 
     } else {
-      newSavedInvoices = [...savedInvoices, invoiceToSave];
+        const existingIndex = savedInvoices.findIndex(inv => inv.id === invoice.id);
+        if (existingIndex >= 0) {
+            const newSavedInvoices = [...savedInvoices];
+            newSavedInvoices[existingIndex] = invoiceToSave;
+            setSavedInvoices(newSavedInvoices);
+        } else {
+            setSavedInvoices([...savedInvoices, invoiceToSave]);
+        }
+        setInvoice(prev => ({ ...prev, name })); 
     }
 
-    setSavedInvoices(newSavedInvoices);
-    setInvoice(prev => ({ ...prev, name })); 
     setShowSaveModal(false);
     setSaveName('');
   };
@@ -379,8 +463,6 @@ export default function App() {
   const togglePaymentStatus = () => {
     setInvoice(prev => ({ ...prev, isPaid: !prev.isPaid }));
   };
-
-  // --- Backup & Restore Logic ---
 
   const handleBackupData = () => {
     const backup = {
@@ -438,15 +520,12 @@ export default function App() {
       }
     };
     reader.readAsText(file);
-    e.target.value = null; // Reset input
+    e.target.value = null; 
   };
-
-  // --- Render ---
 
   return (
     <div className={`min-h-screen bg-slate-50 font-sans text-slate-800 ${isPrintMode ? 'p-0 bg-white' : 'p-4 md:p-8'}`}>
       
-      {/* Top Bar */}
       {!isPrintMode && (
         <header className="w-full mx-auto mb-6 md:mb-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 md:gap-6">
           <div className="flex items-center gap-3">
@@ -458,6 +537,9 @@ export default function App() {
           
           <div className="flex flex-wrap gap-2 w-full lg:w-auto">
             <div className="flex gap-2 mr-2 border-r border-slate-200 pr-2">
+               <Button variant="secondary" icon={FilePlus} onClick={handleNewInvoice} title="Create New Invoice">
+                New
+               </Button>
                <Button variant="secondary" icon={FolderOpen} onClick={() => setShowLoadModal(true)}>
                 Load
               </Button>
@@ -471,8 +553,8 @@ export default function App() {
             <Button variant="secondary" icon={Package} onClick={() => setShowMaterialModal(true)}>
               Materials
             </Button>
-            <Button variant="outline" icon={Download} onClick={handlePrint} title="Save as PDF">
-              Download PDF
+            <Button variant="outline" icon={Download} onClick={handleDownloadPDF} disabled={isDownloading} title="Download PDF File">
+              {isDownloading ? 'Generating...' : 'Download PDF'}
             </Button>
             <Button variant="primary" icon={Printer} onClick={handlePrint}>
               Print
@@ -483,11 +565,9 @@ export default function App() {
 
       <div className={`w-full mx-auto grid grid-cols-1 ${isPrintMode ? 'lg:grid-cols-1' : 'lg:grid-cols-12'} gap-6 md:gap-8`}>
         
-        {/* LEFT COLUMN: Controls */}
         {!isPrintMode && (
           <div className="lg:col-span-4 space-y-6">
             
-            {/* Branding Card */}
             <Card className="p-5 space-y-4">
                <h2 className="font-semibold text-slate-700 flex items-center gap-2">
                 <ImageIcon size={18} /> Branding
@@ -518,7 +598,6 @@ export default function App() {
               </div>
             </Card>
 
-            {/* Invoice Meta */}
             <Card className="p-5 space-y-4">
               <h2 className="font-semibold text-slate-700 flex items-center gap-2">
                 <Briefcase size={18} /> Invoice Details
@@ -572,7 +651,6 @@ export default function App() {
               </div>
             </Card>
 
-            {/* Financial Config */}
             <Card className="p-5 space-y-4">
               <h2 className="font-semibold text-slate-700 flex items-center gap-2">
                 <CreditCard size={18} /> Financials
@@ -672,7 +750,6 @@ export default function App() {
               </div>
             </Card>
             
-            {/* NEW FOOTER */}
             <div className="text-center text-xs text-slate-400 py-4">
               <p className="font-medium">By Error101 © 2025</p>
               <p>Licensed under CC BY-NC 4.0</p>
@@ -680,11 +757,9 @@ export default function App() {
           </div>
         )}
 
-        {/* RIGHT COLUMN: The Invoice (WYSIWYG) */}
         <div className={`${isPrintMode ? 'w-full' : 'lg:col-span-8'}`}>
-          <div className="bg-white shadow-xl shadow-slate-200/60 rounded-xl min-h-[auto] md:min-h-[1000px] flex flex-col print:shadow-none print:rounded-none relative overflow-hidden">
+          <div id="invoice-content" className="bg-white shadow-xl shadow-slate-200/60 rounded-xl min-h-[auto] md:min-h-[1000px] flex flex-col print:shadow-none print:rounded-none relative overflow-hidden">
             
-            {/* PAID Stamp */}
             {invoice.isPaid && (
               <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 opacity-20 border-4 md:border-8 border-green-600 text-green-600 rounded-xl p-4 md:p-8 transform -rotate-12 animate-in fade-in zoom-in duration-500">
                 <div className="text-6xl md:text-[8rem] font-black tracking-widest leading-none">PAID</div>
@@ -692,11 +767,9 @@ export default function App() {
               </div>
             )}
 
-            {/* Header Section */}
             <div className="p-6 md:p-12 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start gap-6 md:gap-0">
               <div className="flex-1 w-full md:w-auto">
                 
-                {/* Logo Display */}
                 {activeLogo ? (
                    <div className="mb-6">
                      <img src={activeLogo.data} alt="Company Logo" className="h-16 md:h-20 object-contain" />
@@ -749,7 +822,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Bill To */}
             <div className="p-6 md:p-12 pb-0">
               <h3 className="text-xs font-bold uppercase text-slate-400 mb-2">Bill To</h3>
                {!isPrintMode ? (
@@ -776,7 +848,6 @@ export default function App() {
                 )}
             </div>
 
-            {/* Items Table */}
             <div className="p-6 md:p-12 flex-grow overflow-x-auto">
               <table className="w-full table-fixed min-w-[600px] md:min-w-0">
                 <thead>
@@ -792,10 +863,9 @@ export default function App() {
                   {invoice.items.map((item) => {
                     const description = item.description || '';
                     return (
-                    <tr key={item.id} className="border-b border-slate-50 group hover:bg-slate-50/50">
+                    <tr key={item.id} className="border-b border-slate-50 group hover:bg-slate-50/50 break-inside-avoid page-break-inside-avoid">
                       <td className="py-4 pr-4 align-top">
                         <div className="flex gap-4">
-                          {/* Item Image Display */}
                           {item.image && (
                             <div className="w-16 h-16 shrink-0 bg-slate-100 rounded border border-slate-200 overflow-hidden flex items-center justify-center">
                               <img src={item.image} alt="item" className="w-full h-full object-cover" />
@@ -896,7 +966,7 @@ export default function App() {
                         onChange={(e) => {
                           const mat = savedMaterials.find(m => m.id === e.target.value);
                           if (mat) handleAddItem(mat);
-                          e.target.value = ""; // Reset dropdown
+                          e.target.value = ""; 
                         }}
                         defaultValue=""
                       >
@@ -912,8 +982,7 @@ export default function App() {
               )}
             </div>
 
-            {/* Totals Section */}
-            <div className="bg-slate-50 p-6 md:p-12 border-t border-slate-100 print:bg-transparent">
+            <div className="bg-slate-50 p-6 md:p-12 border-t border-slate-100 print:bg-transparent break-inside-avoid">
               <div className="flex flex-col md:flex-row justify-between items-end gap-12">
                 <div className="w-full md:w-1/2">
                   <h3 className="text-xs font-bold uppercase text-slate-400 mb-2">Notes</h3>
@@ -930,7 +999,7 @@ export default function App() {
 
                 <div className="w-full md:w-1/3 space-y-3">
                   <div className="flex justify-between text-slate-600">
-                    <span>Subtotal</span>
+                    <span>{invoice.hideMarkup ? 'Subtotal' : 'Subtotal'}</span>
                     <span>{CURRENCY_FORMAT.format(invoice.hideMarkup ? totals.subtotalWithMarkup : totals.subtotal)}</span>
                   </div>
 
@@ -976,9 +1045,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* --- Modals --- */}
-
-      {/* Save Invoice Modal */}
       <Modal isOpen={showSaveModal} onClose={() => setShowSaveModal(false)} title="Save Invoice / Template">
         <div className="space-y-4">
           <p className="text-sm text-slate-600">Give your invoice a name to save it as a template or draft. It will be stored in your browser.</p>
@@ -992,13 +1058,13 @@ export default function App() {
               autoFocus
             />
           </div>
-          <div className="flex justify-end pt-2">
-            <Button onClick={handleSaveInvoice} icon={Save}>Save Invoice</Button>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button onClick={() => handleSaveInvoice(true)} variant="outline" icon={Copy}>Save as New</Button>
+            <Button onClick={() => handleSaveInvoice(false)} icon={Save}>Save Changes</Button>
           </div>
         </div>
       </Modal>
 
-      {/* Load Invoice Modal */}
       <Modal isOpen={showLoadModal} onClose={() => setShowLoadModal(false)} title="Saved Invoices">
         <div className="space-y-4">
           {savedInvoices.length === 0 ? (
@@ -1031,11 +1097,9 @@ export default function App() {
         </div>
       </Modal>
 
-      {/* Materials Modal */}
       <Modal isOpen={showMaterialModal} onClose={() => { setShowMaterialModal(false); setTempMaterialImage(null); }} title="Manage Saved Materials">
         <div className="space-y-6">
           
-          {/* Add New Section */}
           <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
             <h4 className="text-sm font-bold text-slate-700 mb-3">Add New Material</h4>
             <div className="space-y-3">
@@ -1098,7 +1162,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* List Section */}
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 border-b">
@@ -1152,11 +1215,9 @@ export default function App() {
         </div>
       </Modal>
 
-      {/* Configuration Modal (Markups / Deposits / Logos) */}
       <Modal isOpen={showConfigModal} onClose={() => setShowConfigModal(false)} title="Invoice Configuration">
         <div className="space-y-8">
           
-           {/* Backup Section */}
            <div>
             <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
               <RefreshCw size={16}/> Backup & Restore Data
@@ -1185,7 +1246,6 @@ export default function App() {
 
            <hr className="border-slate-100" />
           
-           {/* Logo Section */}
            <div>
             <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2">
               <ImageIcon size={16}/> Logo Profiles
@@ -1229,7 +1289,6 @@ export default function App() {
 
           <hr className="border-slate-100" />
 
-          {/* Markup Section */}
           <div>
             <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2">
               <LayoutTemplate size={16}/> Markup Profiles
@@ -1271,7 +1330,6 @@ export default function App() {
 
           <hr className="border-slate-100" />
 
-          {/* Deposit Section */}
           <div>
             <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2">
               <CreditCard size={16}/> Deposit Profiles
@@ -1314,12 +1372,14 @@ export default function App() {
         </div>
       </Modal>
 
-      {/* Print Styles */}
       <style>{`
         @media print {
           @page { margin: 0; size: auto; }
           body { background: white; }
           .no-print { display: none !important; }
+        }
+        tr, .break-inside-avoid {
+          page-break-inside: avoid;
         }
       `}</style>
     </div>
