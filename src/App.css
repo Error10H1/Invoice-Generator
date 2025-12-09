@@ -74,7 +74,13 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   );
 };
 
-const generateId = () => Math.random().toString(36).substr(2, 9);
+// Robust ID generation to prevent overwrite collisions
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substr(2, 9);
+};
 
 const CURRENCY_FORMAT = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -303,6 +309,13 @@ export default function App() {
   const handleDownloadPDF = async () => {
     setIsDownloading(true);
     
+    // Check for offline status before attempting to load external script
+    if (!window.html2pdf && !navigator.onLine) {
+        alert("You are currently offline. The 'Download PDF' feature requires an internet connection to load the PDF engine. Please use the 'Print' button and select 'Save as PDF' instead.");
+        setIsDownloading(false);
+        return;
+    }
+
     const loadPdfLibrary = () => {
       return new Promise((resolve, reject) => {
         if (window.html2pdf) {
@@ -368,7 +381,7 @@ export default function App() {
     } catch (err) {
       console.error("PDF Error:", err);
       setIsDownloading(false);
-      if (confirm("Automatic PDF generation failed. Use standard Print dialog?")) {
+      if (confirm("Automatic PDF generation failed (likely due to connection). Use standard Print dialog?")) {
         handlePrint();
       }
     }
@@ -405,6 +418,7 @@ export default function App() {
   const handleSaveInvoice = (asNew = false) => {
     const name = saveName.trim() || invoice.name || `Invoice ${invoice.number}`;
     
+    // Explicitly generate a NEW ID if 'Save as New' is selected, otherwise keep current
     const idToUse = asNew ? generateId() : invoice.id;
     
     const invoiceToSave = {
