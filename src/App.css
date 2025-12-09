@@ -312,34 +312,54 @@ export default function App() {
     }, 100);
   };
 
-  // --- DIRECT PDF DOWNLOAD FUNCTION ---
-  // This uses the html2pdf library included in index.html
-  const handleDownloadPDF = () => {
+  // --- AUTO-LOAD PDF LIBRARY & DOWNLOAD ---
+  const handleDownloadPDF = async () => {
     setIsDownloading(true);
+    
+    // 1. Check/Load Library
+    if (!window.html2pdf) {
+      try {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      } catch (err) {
+        alert("Failed to load PDF engine. Please check your internet connection.");
+        setIsDownloading(false);
+        return;
+      }
+    }
+
+    // 2. Prepare Element
     const element = document.getElementById('invoice-content');
     
-    // Config for html2pdf
+    // Temporarily force desktop width for cleaner PDF generation on mobile
+    const originalStyle = element.style.cssText;
+    element.style.minWidth = '800px'; 
+    element.style.padding = '40px';
+
+    // 3. Configure & Save
     const opt = {
       margin: 0.5,
       filename: `${invoice.number}_${invoice.to.name.replace(/\s+/g, '_') || 'invoice'}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 }, // Higher scale for better quality
+      html2canvas: { scale: 2, useCORS: true }, 
       jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
     };
 
-    if (window.html2pdf) {
-      // Execute download
-      window.html2pdf().set(opt).from(element).save().then(() => {
-        setIsDownloading(false);
-      }).catch(err => {
-        console.error("PDF generation failed:", err);
-        setIsDownloading(false);
-        alert("Failed to generate PDF. Please try the Print button instead.");
-      });
-    } else {
-      alert("PDF library is not loaded. Please verify index.html has the script tag.");
+    window.html2pdf().set(opt).from(element).save().then(() => {
+      // Cleanup
+      element.style.cssText = originalStyle;
       setIsDownloading(false);
-    }
+    }).catch(err => {
+      console.error(err);
+      element.style.cssText = originalStyle;
+      setIsDownloading(false);
+      alert("Error generating PDF. Please try the 'Print' button as a backup.");
+    });
   };
 
   const handleLogoUpload = (e) => {
