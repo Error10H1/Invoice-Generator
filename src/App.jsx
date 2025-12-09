@@ -21,7 +21,9 @@ import {
   Upload as UploadIcon,
   RefreshCw,
   CheckCircle,
-  Circle
+  Circle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 // --- Components ---
@@ -114,6 +116,7 @@ const DEFAULT_INVOICE_STATE = {
   ],
   notes: 'Thank you for your business. Please send payment within 14 days.',
   isPaid: false, // New state for payment status
+  hideMarkup: false, // New state for hiding markup
 };
 
 // --- Main App ---
@@ -149,7 +152,7 @@ export default function App() {
   const [invoice, setInvoice] = useState(() => {
     try {
       const saved = localStorage.getItem('proInvoice_currentDraft');
-      // Merge defaults to ensure new fields (like isPaid) exist in old saved data
+      // Merge defaults to ensure new fields (like isPaid, hideMarkup) exist in old saved data
       return saved ? { ...DEFAULT_INVOICE_STATE, ...JSON.parse(saved) } : { ...DEFAULT_INVOICE_STATE, id: generateId() };
     } catch(e) { 
       return { ...DEFAULT_INVOICE_STATE, id: generateId() }; 
@@ -592,6 +595,24 @@ export default function App() {
               </div>
 
               <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-semibold uppercase text-slate-400 block">Markup Visibility</label>
+                </div>
+                <button 
+                  onClick={() => setInvoice(prev => ({ ...prev, hideMarkup: !prev.hideMarkup }))}
+                  className={`w-full flex items-center justify-between p-2 rounded text-sm border ${invoice.hideMarkup ? 'bg-slate-100 border-slate-300 text-slate-600' : 'bg-white border-slate-200 text-slate-800'}`}
+                >
+                  <span className="flex items-center gap-2">
+                    {invoice.hideMarkup ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {invoice.hideMarkup ? 'Markup Hidden on Invoice' : 'Markup Visible on Invoice'}
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${invoice.hideMarkup ? 'bg-slate-200' : 'bg-green-100 text-green-700'}`}>
+                    {invoice.hideMarkup ? 'Merged' : 'Separate'}
+                  </span>
+                </button>
+              </div>
+
+              <div>
                 <label className="text-xs font-semibold uppercase text-slate-400 mb-1 block">Deposit / Retainer</label>
                 <div className="relative">
                   <select 
@@ -907,10 +928,10 @@ export default function App() {
                 <div className="w-full md:w-1/3 space-y-3">
                   <div className="flex justify-between text-slate-600">
                     <span>Subtotal</span>
-                    <span>{CURRENCY_FORMAT.format(totals.subtotal)}</span>
+                    <span>{CURRENCY_FORMAT.format(invoice.hideMarkup ? totals.subtotalWithMarkup : totals.subtotal)}</span>
                   </div>
 
-                  {totals.markupAmount > 0 && (
+                  {totals.markupAmount > 0 && !invoice.hideMarkup && (
                      <div className="flex justify-between text-green-600">
                       <span>Markup ({totals.markupName})</span>
                       <span>+ {CURRENCY_FORMAT.format(totals.markupAmount)}</span>
