@@ -445,11 +445,11 @@ export default function App() {
       
       {/* Top Bar */}
       {!isPrintMode && (
-        <header className="max-w-7xl mx-auto mb-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <header className="w-full mx-auto mb-6 md:mb-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 md:gap-6">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Error 101's Invoice Generator</h1>
-              <p className="text-slate-500 text-sm">Professional Generator</p>
+              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">Error 101's Invoice Generator</h1>
+              <p className="text-slate-500 text-xs md:text-sm">Professional Generator</p>
             </div>
           </div>
           
@@ -475,7 +475,7 @@ export default function App() {
         </header>
       )}
 
-      <div className={`max-w-7xl mx-auto grid grid-cols-1 ${isPrintMode ? 'lg:grid-cols-1' : 'lg:grid-cols-12'} gap-8`}>
+      <div className={`w-full mx-auto grid grid-cols-1 ${isPrintMode ? 'lg:grid-cols-1' : 'lg:grid-cols-12'} gap-6 md:gap-8`}>
         
         {/* LEFT COLUMN: Controls */}
         {!isPrintMode && (
@@ -658,19 +658,19 @@ export default function App() {
 
         {/* RIGHT COLUMN: The Invoice (WYSIWYG) */}
         <div className={`${isPrintMode ? 'w-full' : 'lg:col-span-8'}`}>
-          <div className="bg-white shadow-xl shadow-slate-200/60 rounded-xl min-h-[1000px] flex flex-col print:shadow-none print:rounded-none relative overflow-hidden">
+          <div className="bg-white shadow-xl shadow-slate-200/60 rounded-xl min-h-[auto] md:min-h-[1000px] flex flex-col print:shadow-none print:rounded-none relative overflow-hidden">
             
             {/* PAID Stamp */}
             {invoice.isPaid && (
-              <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 opacity-20 border-8 border-green-600 text-green-600 rounded-xl p-8 transform -rotate-12 animate-in fade-in zoom-in duration-500">
-                <div className="text-[8rem] font-black tracking-widest leading-none">PAID</div>
-                <div className="text-2xl font-bold text-center uppercase tracking-[1em] mt-2">In Full</div>
+              <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 opacity-20 border-4 md:border-8 border-green-600 text-green-600 rounded-xl p-4 md:p-8 transform -rotate-12 animate-in fade-in zoom-in duration-500">
+                <div className="text-6xl md:text-[8rem] font-black tracking-widest leading-none">PAID</div>
+                <div className="text-lg md:text-2xl font-bold text-center uppercase tracking-[1em] mt-2">In Full</div>
               </div>
             )}
 
             {/* Header Section */}
-            <div className="p-8 md:p-12 border-b border-slate-100 flex justify-between items-start">
-              <div className="flex-1">
+            <div className="p-6 md:p-12 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start gap-6 md:gap-0">
+              <div className="flex-1 w-full md:w-auto">
                 
                 {/* Logo Display */}
                 {activeLogo ? (
@@ -706,7 +706,7 @@ export default function App() {
                 )}
               </div>
 
-              <div className="text-right">
+              <div className="text-left md:text-right w-full md:w-auto">
                 <h2 className="text-5xl font-light text-slate-200 uppercase tracking-widest">Invoice</h2>
                 <div className="mt-4 space-y-1">
                   <div className="flex justify-between gap-8 text-sm">
@@ -726,7 +726,7 @@ export default function App() {
             </div>
 
             {/* Bill To */}
-            <div className="p-8 md:p-12 pb-0">
+            <div className="p-6 md:p-12 pb-0">
               <h3 className="text-xs font-bold uppercase text-slate-400 mb-2">Bill To</h3>
                {!isPrintMode ? (
                   <div className="space-y-2">
@@ -753,8 +753,8 @@ export default function App() {
             </div>
 
             {/* Items Table */}
-            <div className="p-8 md:p-12 flex-grow">
-              <table className="w-full table-fixed">
+            <div className="p-6 md:p-12 flex-grow overflow-x-auto">
+              <table className="w-full table-fixed min-w-[600px] md:min-w-0">
                 <thead>
                   <tr className="border-b-2 border-slate-100 text-left">
                     <th className="py-3 text-xs font-bold uppercase text-slate-400 w-[50%]">Description</th>
@@ -889,7 +889,7 @@ export default function App() {
             </div>
 
             {/* Totals Section */}
-            <div className="bg-slate-50 p-8 md:p-12 border-t border-slate-100 print:bg-transparent">
+            <div className="bg-slate-50 p-6 md:p-12 border-t border-slate-100 print:bg-transparent">
               <div className="flex flex-col md:flex-row justify-between items-end gap-12">
                 <div className="w-full md:w-1/2">
                   <h3 className="text-xs font-bold uppercase text-slate-400 mb-2">Notes</h3>
