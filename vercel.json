@@ -1,17 +1,19 @@
 {
-  
   "redirects": [
     {
       "source": "/invoice/:path*",
       "destination": "https://invoice-generator-xyz.vercel.app/:path*",
+      "permanent": true
     },
     {
       "source": "/pdf/:path*",
       "destination": "https://batch-pdf-converter-afkbn46dq-aidens-projects-8a279b3e.vercel.app/",
+      "permanent": true
     },
     {
       "source": "/text/:path*",
       "destination": "https://text-extractor-def.vercel.app/:path*",
+      "permanent": false
     }
   ]
 }
