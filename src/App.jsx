@@ -601,13 +601,13 @@ export default function App() {
           
           <div className="flex flex-wrap gap-2 w-full lg:w-auto">
             <div className="flex gap-2 mr-2 border-r border-slate-200 pr-2">
-               <Button variant="secondary" icon={FilePlus} onClick={handleNewInvoice} title="Create New Invoice">
+                <Button variant="secondary" icon={FilePlus} onClick={handleNewInvoice} title="Create New Invoice">
                 New
-               </Button>
-               <Button variant="secondary" icon={FolderOpen} onClick={() => setShowLoadModal(true)}>
+                </Button>
+                <Button variant="secondary" icon={FolderOpen} onClick={() => setShowLoadModal(true)}>
                 Load
               </Button>
-               <Button variant="secondary" icon={Save} onClick={() => { setSaveName(invoice.name); setShowSaveModal(true); }}>
+                <Button variant="secondary" icon={Save} onClick={() => { setSaveName(invoice.name); setShowSaveModal(true); }}>
                 Save
               </Button>
             </div>
@@ -1371,7 +1371,7 @@ export default function App() {
                   <div className="flex items-center gap-3 overflow-hidden">
                     {p.logo ? (
                       <div className="w-10 h-10 bg-white rounded flex items-center justify-center border border-slate-200 flex-shrink-0">
-                         <img src={p.logo} alt={p.profileName} className="max-w-full max-h-full p-1" />
+                          <img src={p.logo} alt={p.profileName} className="max-w-full max-h-full p-1" />
                       </div>
                     ) : (
                       <div className="w-10 h-10 bg-white rounded flex items-center justify-center border border-slate-200 flex-shrink-0 text-slate-300">
