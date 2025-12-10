@@ -13,7 +13,7 @@
     {
       "source": "/text/:path*",
       "destination": "https://text-extractor-def.vercel.app/:path*",
-      "permanent": false
+      "permanent": true
     }
   ]
 }
