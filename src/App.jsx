@@ -130,6 +130,46 @@ const DEFAULT_INVOICE_STATE = {
 // --- Main App ---
 
 export default function App() {
+  // --- Style Injection Hook (Fixes missing CSS in .jsx mode) ---
+  useEffect(() => {
+    // 1. Inject Tailwind CSS
+    const existingScript = document.querySelector('script[src="https://cdn.tailwindcss.com"]');
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.src = "https://cdn.tailwindcss.com";
+      script.async = true;
+      document.head.appendChild(script);
+    }
+
+    // 2. Inject Google Fonts
+    const existingLink = document.querySelector('link[href*="fonts.googleapis.com"]');
+    if (!existingLink) {
+      const link = document.createElement('link');
+      link.href = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap";
+      link.rel = "stylesheet";
+      document.head.appendChild(link);
+    }
+
+    // 3. Inject Base Styles specifically for printing and body
+    const styleId = 'injected-base-styles';
+    if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.innerHTML = `
+            body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; }
+            @media print {
+              @page { margin: 0; size: auto; }
+              body { background: white; -webkit-print-color-adjust: exact; }
+              .no-print { display: none !important; }
+            }
+            tr, .break-inside-avoid {
+              page-break-inside: avoid;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+  }, []);
+
   // --- Data Loading Hooks ---
   const usePersistentState = (key, defaultValue) => {
     const [state, setState] = useState(() => {
@@ -1480,14 +1520,7 @@ export default function App() {
       </Modal>
 
       <style>{`
-        @media print {
-          @page { margin: 0; size: auto; }
-          body { background: white; }
-          .no-print { display: none !important; }
-        }
-        tr, .break-inside-avoid {
-          page-break-inside: avoid;
-        }
+        /* Removed print override to avoid conflict with injected styles */
       `}</style>
     </div>
   );
