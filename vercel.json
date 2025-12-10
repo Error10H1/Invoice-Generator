@@ -21,7 +21,7 @@
     },
     {
       "source": "/pdf/:path*",
-      "destination": "https://batch-pdf-converter-afkbn46dq-aidens-projects-8a279b3e.vercel.app/:path*"
+      "destination": "https://batch-pdf-converter.vercel.app/"
     },
     {
       "source": "/text/:path*",
