@@ -21,7 +21,7 @@
     },
     {
       "source": "/pdf/:path*",
-      "destination": "https://batch-pdf-converter.vercel.app/:path*"
+      "destination": "https://batch-pdf-converter.vercel.app/"
     },
     {
       "source": "/text/:path*",
